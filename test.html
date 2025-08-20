@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Интерактивные флешкарты — QUIZ</title>
+<style>
+  :root{
+    --bg:#f7f1e6;          /* светло-коричневый фон */
+    --paper:#fff8ef;       /* карточки */
+    --ink:#3e2f1b;         /* текст */
+    --accent:#b0855b;      /* акцентный коричневый */
+    --accent-2:#d1a77a;    /* светлее */
+    --ok:#2e7d32;          /* зелёный */
+    --bad:#c62828;         /* красный */
+    --shadow:0 10px 24px rgba(62,47,27,0.12), 0 2px 6px rgba(62,47,27,0.08);
+    --radius:18px;
+    --radius-sm:12px;
+    --radius-lg:26px;
+    --tr: 220ms ease;
+  }
+  html,body{height:100%}
+  body{
+    margin:0;
+    background:linear-gradient(180deg,var(--bg),#f9f4ea);
+    color:var(--ink);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, Inter, "Noto Sans", "Apple Color Emoji","Segoe UI Emoji", "Noto Color Emoji", Arial, sans-serif;
+    line-height:1.5;
+  }
+  .wrap{
+    max-width:980px;
+    margin:24px auto 64px;
+    padding:0 16px;
+  }
+  header{
+    display:flex; gap:12px; align-items:center; justify-content:space-between; margin-bottom:16px;
+  }
+  .brand{
+    display:flex; align-items:center; gap:12px;
+  }
+  .logo{
+    width:44px; height:44px; border-radius:50%;
+    background: radial-gradient(120% 120% at 30% 30%, #e8d7c3 0 30%, #d9c2a4 30% 60%, #b88a5f 60% 100%);
+    box-shadow: var(--shadow);
+  }
+  h1{
+    font-size: clamp(20px, 4vw, 26px);
+    margin:0;
+    letter-spacing:.3px;
+  }
+  .card{
+    background:var(--paper);
+    border-radius:var(--radius-lg);
+    box-shadow:var(--shadow);
+    padding:22px;
+  }
+
+  /* Controls bar */
+  .controls{
+    display:flex; flex-wrap:wrap; gap:10px; align-items:center; justify-content:space-between; margin: 14px 0 20px;
+  }
+  .controls-left, .controls-right{display:flex; flex-wrap:wrap; gap:10px; align-items:center}
+  button, .pill{
+    appearance:none; border:none; cursor:pointer;
+    background:linear-gradient(180deg, #f6e7d4, #efd8bf);
+    color:var(--ink); padding:10px 14px; border-radius:var(--radius);
+    box-shadow: var(--shadow);
+    font-weight:600; letter-spacing:.2px; transition: transform var(--tr), filter var(--tr), box-shadow var(--tr), background var(--tr);
+  }
+  button:hover{ transform: translateY(-1px);}
+  button:active{ transform: translateY(0); filter: saturate(.9);}
+  .primary{
+    background: linear-gradient(180deg, #d7b28b, #bf9164);
+    color:#fff; text-shadow: 0 1px 0 rgba(0,0,0,0.25);
+  }
+  .ghost{
+    background:transparent; box-shadow: inset 0 0 0 2px rgba(176,133,91,.25);
+  }
+  .toggle.active{ background: linear-gradient(180deg,#c49a72,#a77c53); color:#fff}
+  .hint-btn[disabled], .disabled{opacity:.6; pointer-events:none}
+  .sep{height:1px; background:rgba(62,47,27,.08); margin:10px 0 0}
+
+  /* Quiz area */
+  .quiz{
+    display:grid; gap:16px; grid-template-columns: 1fr;
+  }
+  .question{
+    font-size: clamp(18px, 3.5vw, 22px);
+    background:#fff; padding:16px 18px; border-radius:var(--radius); box-shadow: var(--shadow);
+    min-height:64px; display:flex; align-items:center;
+  }
+  .meta{
+    display:flex; gap:8px; flex-wrap:wrap; align-items:center;
+  }
+  .tag{
+    background: rgba(176,133,91,.14);
+    padding:6px 10px; border-radius:999px; font-size:12px; font-weight:600;
+  }
+  .answer-row{
+    display:flex; flex-wrap:wrap; gap:10px; align-items:center;
+  }
+  input[type="text"]{
+    flex:1; min-width:220px;
+    background:#fff; border-radius:14px; border:2px solid transparent; outline:none;
+    padding:14px 16px; font-size:16px; box-shadow: var(--shadow); transition: border var(--tr), box-shadow var(--tr);
+  }
+  input[type="text"]:focus{ border-color: rgba(176,133,91,.45)}
+  .status{
+    min-height:28px; font-weight:700;
+  }
+  .status.ok{ color:var(--ok)}
+  .status.bad{ color:var(--bad)}
+  .explain{
+    background:#fff; border-left:4px solid var(--accent-2); padding:14px 16px; border-radius:10px; white-space:pre-wrap;
+  }
+
+  /* Hint bubble */
+  .hint{
+    display:none; opacity:0; transform: translateY(-6px);
+    background: #fff; border-left:4px solid #e0b98d; padding:12px 14px; border-radius:12px;
+    transition: opacity var(--tr), transform var(--tr);
+  }
+  .hint.show{ display:block; opacity:1; transform: translateY(0);}
+
+  /* Bottom: source editor + filters */
+  .grid{
+    display:grid; gap:16px; grid-template-columns: 1fr;
+  }
+  .panel{
+    background:var(--paper); border-radius:var(--radius-lg); box-shadow: var(--shadow); padding:16px;
+  }
+  .panel h3{ margin:0 0 8px 0; font-size:18px}
+  textarea{
+    width:100%; min-height:160px; resize:vertical; border-radius:14px; border:2px solid transparent; padding:12px; box-shadow: var(--shadow);
+    background:#fff; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  }
+  .filters{ display:flex; gap:8px; flex-wrap:wrap; margin-top:8px}
+  .chip{
+    border-radius: 999px; padding:8px 12px; font-weight:600; cursor:pointer;
+    background:#fff; box-shadow: var(--shadow); transition: transform var(--tr), background var(--tr);
+  }
+  .chip.active{ background: #e6cfb5;}
+  .muted{opacity:.7}
+  .progress{
+    display:flex; gap:10px; align-items:center; flex-wrap:wrap;
+    font-weight:600; font-size:14px;
+  }
+  .bar{
+    position:relative; height:10px; background: #eadac7; border-radius:999px; overflow:hidden; width:180px;
+  }
+  .bar>span{
+    position:absolute; left:0; top:0; bottom:0; width:0; background: linear-gradient(90deg, #b88a5f, #cda57a);
+  }
+
+  /* Animations */
+  .fade-in{ animation: fade .32s ease both}
+  @keyframes fade{ from{opacity:0; transform: translateY(6px)} to{opacity:1; transform: translateY(0)}}
+  .shake{ animation: shake .45s cubic-bezier(.36,.07,.19,.97) both}
+  @keyframes shake{
+    10%,90%{ transform: translateX(-1px)}
+    20%,80%{ transform: translateX(2px)}
+    30%,50%,70%{ transform: translateX(-4px)}
+    40%,60%{ transform: translateX(4px)}
+  }
+  .flash-ok{ animation: ok 600ms ease both}
+  @keyframes ok{
+    0%{ box-shadow: 0 0 0 0 rgba(46,125,50,0.35)}
+    100%{ box-shadow: 0 0 0 18px rgba(46,125,50,0)}
+  }
+
+  /* Footer */
+  footer{ margin:26px 0 0; text-align:center; font-size:12px; opacity:.7}
+  kbd{ background:#fff; border-radius:6px; padding:2px 6px; border:1px solid rgba(0,0,0,.08); box-shadow: inset 0 -1px 0 rgba(0,0,0,.05)}
+  .small{ font-size:12px}
+
+  @media (min-width: 900px){
+    .grid{ grid-template-columns: 1.3fr .9fr}
+  }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="brand">
+        <div class="logo" aria-hidden="true"></div>
+        <h1>Флешкарты • Проверка знаний</h1>
+      </div>
+      <div class="progress">
+        <div>Верно: <span id="goodCount">0</span>/<span id="totalCount">0</span></div>
+        <div class="bar" aria-label="Прогресс"><span id="barFill"></span></div>
+      </div>
+    </header>
+
+    <div class="card quiz">
+      <div class="meta">
+        <span class="tag" id="deckMode">Обычный режим</span>
+        <span class="tag" id="topicTag">—</span>
+      </div>
+
+      <div id="question" class="question fade-in">Вопрос будет здесь…</div>
+
+      <div class="answer-row">
+        <input id="answerInput" type="text" placeholder="Введите ответ…" autocomplete="off" />
+        <button id="checkBtn" class="primary">Проверить</button>
+        <button id="nextBtn" class="ghost">Следующий</button>
+        <button id="hintBtn" class="hint-btn">Подсказка</button>
+      </div>
+
+      <div id="status" class="status" role="status" aria-live="polite"></div>
+      <div id="hint" class="hint"></div>
+      <div id="explain" class="explain" style="display:none"></div>
+
+      <div class="controls">
+        <div class="controls-left">
+          <button id="repeatBtn" class="toggle" title="Показать только ошибки">Повтор ошибок</button>
+          <button id="shuffleBtn">Перемешать</button>
+          <button id="resetBtn" class="ghost">Сброс прогресса</button>
+        </div>
+        <div class="controls-right small muted">
+          Горячие клавиши: <kbd>Enter</kbd> — проверить, <kbd>N</kbd> — следующий, <kbd>H</kbd> — подсказка
+        </div>
+      </div>
+      <div class="sep"></div>
+    </div>
+
+    <div class="grid" style="margin-top:16px">
+      <div class="panel">
+        <h3>Фильтр по тегам</h3>
+        <div id="filters" class="filters"></div>
+      </div>
+
+      <div class="panel">
+        <h3>Исходный материал</h3>
+        <textarea id="source" spellcheck="false" aria-label="Материал для парсинга"></textarea>
+        <div style="display:flex; gap:10px; margin-top:8px; flex-wrap:wrap">
+          <button id="rebuildBtn">Пересобрать колоду</button>
+          <span class="muted small">Форматы: <b>Q:</b>/<b>A:</b>/<b>E:</b>/tags, многострочный; или CSV с заголовками <code>Q;A;E;tags</code>. Синонимы в ответе разделяйте <code>|</code> или <code>;</code>.</span>
+        </div>
+      </div>
+    </div>
+
+    <footer>
+      <p>Поддерживает RU и KZ в вопросах/ответах. Сохранение прогресса — <code>localStorage</code>.</p>
+    </footer>
+  </div>
+
+<script>
+/* ============ Utils ============ */
+const $ = (s,root=document)=>root.querySelector(s);
+const $$= (s,root=document)=>[...root.querySelectorAll(s)];
+const uid = (s)=>crypto.subtle? btoa(unescape(encodeURIComponent(s))).slice(0,24) : (s.length+"-"+s.split("").reduce((a,c)=>a+c.charCodeAt(0),0));
+
+function saveLS(key, val){ localStorage.setItem(key, JSON.stringify(val)); }
+function readLS(key, fallback=null){ try{ return JSON.parse(localStorage.getItem(key)) ?? fallback }catch(e){ return fallback } }
+
+function stripPunct(s){
+  return (s||"").toLowerCase()
+    .replace(/[.,;:!?()[\]{}"'`«»]/g," ")
+    .replace(/\s+/g," ")
+    .trim();
+}
+function removeSpaces(s){ return (s||"").replace(/\s+/g,"").toLowerCase().trim(); }
+
+/* Number word maps for RU/KZ/EN (0..20 + tens); extendable */
+const NUM_WORDS = {
+  ru: {
+    "ноль":0,"один":1,"одна":1,"два":2,"две":2,"три":3,"четыре":4,"пять":5,"шесть":6,"семь":7,"восемь":8,"девять":9,
+    "десять":10,"одиннадцать":11,"двенадцать":12,"тринадцать":13,"четырнадцать":14,"пятнадцать":15,"шестнадцать":16,"семнадцать":17,"восемнадцать":18,"девятнадцать":19,"двадцать":20,
+    "тридцать":30,"сорок":40,"пятьдесят":50,"шестьдесят":60,"семьдесят":70,"восемьдесят":80,"девяносто":90,"сто":100
+  },
+  kz: {
+    "нөл":0,"бір":1,"екі":2,"үш":3,"төрт":4,"бес":5,"алты":6,"жеты":7,"жеті":7,"сегіз":8,"тоғыз":9,
+    "он":10,"он бір":11,"он екі":12,"он үш":13,"он төрт":14,"он бес":15,"он алты":16,"он жеті":17,"он сегіз":18,"он тоғыз":19,"жиырма":20,
+    "отыз":30,"қырық":40,"елу":50,"алпыс":60,"жетпіс":70,"сексен":80,"тоқсан":90,"жүз":100
+  },
+  en: {
+    "zero":0,"one":1,"two":2,"three":3,"four":4,"five":5,"six":6,"seven":7,"eight":8,"nine":9,
+    "ten":10,"eleven":11,"twelve":12,"thirteen":13,"fourteen":14,"fifteen":15,"sixteen":16,"seventeen":17,"eighteen":18,"nineteen":19,"twenty":20,
+    "thirty":30,"forty":40,"fifty":50,"sixty":60,"seventy":70,"eighty":80,"ninety":90,"hundred":100
+  }
+};
+function numberFromWords(s){
+  s = stripPunct(s);
+  if(!s) return null;
+  // try plain number first
+  if(/^[+-]?\d+([.,]\d+)?$/.test(s)) return parseFloat(s.replace(",","."));
+  // simple additive parser for small phrases
+  let total = 0;
+  let used = false;
+  for(const dict of [NUM_WORDS.ru, NUM_WORDS.kz, NUM_WORDS.en]){
+    total = 0; used = false;
+    let rest = s;
+    // split by spaces; try to sum components e.g., "двадцать два"
+    const parts = rest.split(/\s+/).filter(Boolean);
+    total = 0; used=false;
+    for(const w of parts){
+      if(w in dict){ total += dict[w]; used=true; }
+      else { used=false; break; }
+    }
+    if(used) return total;
+  }
+  return null;
+}
+
+function normalizeForCompare(s){
+  if(s == null) return {raw:"", collapsed:"", num:null};
+  const raw = String(s);
+  const collapsed = stripPunct(raw).replace(/\s+/g,"").trim();
+  // detect numeric forms
+  let num = null;
+  if(/^[+-]?\d+([.,]\d+)?$/.test(stripPunct(raw))) num = parseFloat(stripPunct(raw).replace(",","."));
+  else {
+    const nw = numberFromWords(raw);
+    if(nw !== null) num = nw;
+  }
+  return { raw, collapsed, num };
+}
+
+function equivalent(a, b){
+  // accept numeric equivalence (2 == "two" == 2.0)
+  if(a.num !== null && b.num !== null){
+    return Math.abs(a.num - b.num) < 1e-9;
+  }
+  // otherwise text equivalence (case/space/punct insensitive)
+  return a.collapsed === b.collapsed;
+}
+
+/* ============ Parser ============ */
+function parseMaterial(text){
+  // Supports:
+  // 1) Blocks with Q:/A:/E:/tags
+  // 2) CSV with headers Q;A;E;tags
+  // 3) Single-line entries separated by blank lines
+  const cards = [];
+
+  // Try CSV first
+  const looksCSV = /^(\s*Q\s*;)/i.test(text) || /;.*;/.test(text.split("\n")[0]||"");
+  if(looksCSV){
+    const lines = text.trim().split(/\r?\n/);
+    let start = 0;
+    let headers = ["Q","A","E","tags"];
+    if(/^\s*q\s*;.*a\s*;/i.test(lines[0])){ headers = lines[0].split(";").map(h=>h.trim()); start=1; }
+    for(let i=start;i<lines.length;i++){
+      const row = lines[i].split(";").map(x=>x.trim());
+      const map = {};
+      headers.forEach((h,idx)=> map[h.toUpperCase()] = row[idx]||"");
+      if(map.Q){
+        cards.push({
+          q: map.Q,
+          a: map.A||"",
+          e: map.E||"",
+          tags: (map.TAGS||"").split(/[,|]/).map(t=>t.trim()).filter(Boolean)
+        });
+      }
+    }
+    return cards;
+  }
+
+  // Block parser
+  const blocks = text.split(/\n\s*\n/).map(b=>b.trim()).filter(Boolean);
+  for(const block of blocks){
+    const lines = block.split(/\r?\n/);
+    let q="", a="", e=""; let tags=[];
+    for(const line of lines){
+      if(/^Q\s*:/.test(line)) q = line.replace(/^Q\s*:\s*/,"").trim();
+      else if(/^A\s*:/.test(line)) a = line.replace(/^A\s*:\s*/,"").trim();
+      else if(/^E\s*:/.test(line)) e = line.replace(/^E\s*:\s*/,"").trim();
+      else if(/^tags?\s*:/.test(line)) tags = line.replace(/^tags?\s*:\s*/i,"").split(/[,|]/).map(x=>x.trim()).filter(Boolean);
+      else {
+        // Allow free text continuation for Q/E if previous exists
+        if(e) e += "\n" + line.trim();
+        else if(q) q += " " + line.trim();
+      }
+    }
+    if(q){
+      cards.push({ q, a, e, tags });
+    }
+  }
+  return cards;
+}
+
+/* ============ Deck & State ============ */
+let deck = [];
+let filteredDeck = [];
+let idx = 0;
+let onlyMistakes = false;
+let deckKey = ""; // for localStorage
+let progress = {}; // by card id: {ok, attempts, lastAnswer, ts}
+
+function computeDeckKey(cards){
+  const sig = cards.map(c=>`${c.q}::${c.a}::${(c.tags||[]).join(",")}`).join("||");
+  return "quiz-progress-" + uid(sig);
+}
+function loadProgress(){ progress = readLS(deckKey, {}); }
+function saveProgress(){ saveLS(deckKey, progress); }
+
+function cardId(card){ return uid(card.q + "::" + (card.a||"")); }
+
+function buildFilters(cards){
+  const set = new Set();
+  cards.forEach(c => (c.tags||[]).forEach(t => set.add(t)));
+  const filters = $("#filters");
+  filters.innerHTML = "";
+  if(set.size===0){ filters.innerHTML = `<span class="muted">Тегов нет — фильтрация недоступна.</span>`; return; }
+  set.forEach(tag=>{
+    const chip = document.createElement("button");
+    chip.className = "chip";
+    chip.textContent = tag;
+    chip.dataset.tag = tag;
+    chip.addEventListener("click", ()=>{
+      chip.classList.toggle("active");
+      applyFilters();
+    });
+    filters.appendChild(chip);
+  });
+}
+function getActiveTags(){
+  return $$(".chip.active").map(ch=>ch.dataset.tag);
+}
+function applyFilters(){
+  const tags = getActiveTags();
+  if(tags.length===0){ filteredDeck = [...deck]; }
+  else{
+    filteredDeck = deck.filter(c => c.tags && c.tags.some(t=> tags.includes(t)));
+  }
+  if(onlyMistakes){
+    filteredDeck = filteredDeck.filter(c => !(progress[cardId(c)]?.ok));
+  }
+  idx = 0;
+  renderCard();
+  updateMeta();
+}
+
+function shuffle(arr){
+  for(let i=arr.length-1;i>0;i--){
+    const j = Math.floor(Math.random()*(i+1));
+    [arr[i],arr[j]] = [arr[j],arr[i]];
+  }
+  return arr;
+}
+
+/* ============ Rendering ============ */
+function renderCard(){
+  $("#totalCount").textContent = filteredDeck.length;
+  const good = Object.values(progress).filter(p=>p.ok).length;
+  $("#goodCount").textContent = Math.min(good, filteredDeck.length);
+  const pct = filteredDeck.length===0 ? 0 : Math.round(100 * ($("#goodCount").textContent / filteredDeck.length));
+  $("#barFill").style.width = pct + "%";
+
+  const qEl = $("#question");
+  const input = $("#answerInput");
+  const status = $("#status");
+  const hint = $("#hint");
+  const explain = $("#explain");
+  const topicTag = $("#topicTag");
+
+  status.textContent = "";
+  status.className = "status";
+  hint.className = "hint";
+  explain.style.display = "none";
+  explain.textContent = "";
+  input.value = "";
+  input.focus();
+
+  if(filteredDeck.length===0){
+    qEl.textContent = onlyMistakes ? "Ошибок для повторения не осталось. Отличная работа!" : "Карточек не найдено. Измените фильтры или пересоберите колоду.";
+    $("#hintBtn").setAttribute("disabled","true");
+    $("#checkBtn").setAttribute("disabled","true");
+    return;
+  }
+  $("#hintBtn").toggleAttribute("disabled", !(filteredDeck[idx].e && filteredDeck[idx].e.trim().length>0));
+
+  qEl.textContent = filteredDeck[idx].q;
+  topicTag.textContent = (filteredDeck[idx].tags && filteredDeck[idx].tags.length) ? filteredDeck[idx].tags.join(", ") : "без тегов";
+}
+
+function updateMeta(){
+  $("#deckMode").textContent = onlyMistakes ? "Режим: Повтор ошибок" : "Обычный режим";
+}
+
+/* ============ Answer Checking ============ */
+function splitAnswers(a){
+  // Accept `|` or `;` as delimiters, trim spaces
+  const raw = (a||"").trim();
+  if(!raw) return [];
+  return raw.split(/[|;]/).map(x=>x.trim()).filter(Boolean);
+}
+function isCorrect(user, card){
+  const variants = splitAnswers(card.a);
+  if(variants.length===0) return false;
+  const u = normalizeForCompare(user);
+
+  for(let v of variants){
+    // support 0b prefix and bases in answers optionally
+    const vClean = v.replace(/^0b/i,"");
+    const vN = normalizeForCompare(vClean);
+    // also try collapses without spaces (e.g., "o(n^2)")
+    if(equivalent(u, vN)) return true;
+
+    // If variant is like "100101₂", strip subscript
+    const vBinarySub = v.replace(/[₀₁₂₃₄₅₆₇₈₉]/g, d=>"0123456789"["₀₁₂₃₄₅₆₇₈₉".indexOf(d)]);
+    if(vBinarySub !== v){
+      const v2 = normalizeForCompare(vBinarySub);
+      if(equivalent(u, v2)) return true;
+    }
+  }
+  return false;
+}
+
+/* ============ Actions ============ */
+function checkAnswer(){
+  const input = $("#answerInput");
+  const val = input.value;
+  const card = filteredDeck[idx];
+  const ok = isCorrect(val, card);
+  const status = $("#status");
+  const explain = $("#explain");
+
+  const p = progress[cardId(card)] ?? {ok:false, attempts:0, lastAnswer:"", ts:0};
+  p.attempts += 1;
+  p.lastAnswer = val;
+  p.ts = Date.now();
+  if(ok) p.ok = true;
+  progress[cardId(card)] = p;
+  saveProgress();
+
+  if(ok){
+    status.textContent = "✅ Правильно!";
+    status.className = "status ok";
+    $("#question").classList.remove("shake");
+    $("#question").classList.add("flash-ok");
+    setTimeout(()=>$("#question").classList.remove("flash-ok"), 650);
+    explain.style.display = card.e ? "block" : "none";
+    explain.textContent = card.e || "";
+  }else{
+    status.textContent = "❌ Неправильно.";
+    status.className = "status bad";
+    $("#question").classList.remove("flash-ok");
+    $("#question").classList.add("shake");
+    setTimeout(()=>$("#question").classList.remove("shake"), 500);
+    explain.style.display = card.e ? "block" : "none";
+    if(card.e){
+      explain.textContent = "Пояснение: " + card.e;
+    }
+  }
+}
+
+function nextCard(){
+  if(filteredDeck.length===0) return;
+  idx = (idx + 1) % filteredDeck.length;
+  renderCard();
+}
+function showHint(){
+  const card = filteredDeck[idx];
+  const hint = $("#hint");
+  if(!card.e){ return; }
+  // Make a short hint: first sentence / up to 80 chars
+  const sent = (card.e||"").split(/(?<=[.!?])\s+/)[0] || card.e;
+  const short = sent.length>120 ? sent.slice(0,117) + "…" : sent;
+  hint.textContent = "Подсказка: " + short;
+  hint.className = "hint show";
+}
+function toggleRepeat(){
+  onlyMistakes = !onlyMistakes;
+  applyFilters();
+}
+function shuffleDeck(){
+  shuffle(deck);
+  applyFilters();
+}
+function resetProgress(){
+  if(!confirm("Сбросить сохранённый прогресс для этой колоды?")) return;
+  progress = {};
+  saveProgress();
+  renderCard();
+}
+
+/* ============ Wiring ============ */
+$("#checkBtn").addEventListener("click", checkAnswer);
+$("#nextBtn").addEventListener("click", nextCard);
+$("#hintBtn").addEventListener("click", showHint);
+$("#repeatBtn").addEventListener("click", ()=>{ toggleRepeat(); updateMeta(); });
+$("#shuffleBtn").addEventListener("click", shuffleDeck);
+$("#resetBtn").addEventListener("click", resetProgress);
+$("#rebuildBtn").addEventListener("click", ()=>{
+  const txt = $("#source").value;
+  const parsed = parseMaterial(txt);
+  if(parsed.length===0){ alert("Не удалось распознать карточки. Проверьте формат."); return; }
+  deck = parsed.map(c=>({
+    q: c.q.trim(),
+    a: c.a.trim(),
+    e: (c.e||"").trim(),
+    tags: (c.tags||[])
+  }));
+  deckKey = computeDeckKey(deck);
+  loadProgress();
+  buildFilters(deck);
+  filteredDeck = [...deck];
+  idx = 0;
+  applyFilters();
+  updateMeta();
+});
+
+document.addEventListener("keydown",(e)=>{
+  if(e.key==="Enter"){ e.preventDefault(); checkAnswer(); }
+  else if(e.key.toLowerCase()==="n"){ nextCard(); }
+  else if(e.key.toLowerCase()==="h"){ showHint(); }
+});
+
+/* ============ Initial content (your task) ============ */
+const initialMaterial = `
+Q: К чему равняется 37 в двоичной системе?
+A: 100101 | 0b100101 | 100101₂
+E: 37₁₀ = 32 + 4 + 1 = 2^5 + 2^2 + 2^0. В двоичной записи ставим 1 на этих позициях (5,2,0), остальное — 0 ⇒ 100101₂.
+tags: информатика, easy
+`.trim();
+
+function init(){
+  $("#source").value = initialMaterial;
+  deck = parseMaterial(initialMaterial);
+  deckKey = computeDeckKey(deck);
+  loadProgress();
+  filteredDeck = [...deck];
+  buildFilters(deck);
+  idx = 0;
+  renderCard();
+  updateMeta();
+}
+init();
+</script>
+</body>
+</html>
